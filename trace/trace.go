@@ -114,6 +114,17 @@ func ChildSpan(ctx context.Context, opName, cmp string, tags ...opentracing.Tag)
 	return sp, ctx
 }
 
+func Span(sp opentracing.Span) func() {
+	ext.Error.Set(sp, false)
+	return func() {
+		sp.Finish()
+	}
+}
+
+func SetError(sp opentracing.Span) {
+	ext.Error.Set(sp, true)
+}
+
 type jaegerLoggerAdapter struct {
 }
 
