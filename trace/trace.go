@@ -126,6 +126,17 @@ func SpanError(sp opentracing.Span) {
 	sp.Finish()
 }
 
+func Span(sp opentracing.Span) func() {
+	ext.Error.Set(sp, false)
+	return func() {
+		sp.Finish()
+	}
+}
+
+func SetError(sp opentracing.Span) {
+	ext.Error.Set(sp, true)
+}
+
 // ChildSpan starts a new child span with specified tags.
 func ChildSpan(
 	ctx context.Context,
