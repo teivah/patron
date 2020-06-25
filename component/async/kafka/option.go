@@ -90,3 +90,13 @@ func DecoderJSON() OptionFunc {
 		return nil
 	}
 }
+
+// WithDurationOffset allows creating a consumer from a given duration.
+// It requires a function indicating how to extract the time from a Kafka message.
+func WithDurationOffset(since time.Duration, timeExtractor TimeExtractor) OptionFunc {
+	return func(c *ConsumerConfig) error {
+		c.DurationOffset = since
+		c.TimeExtractor = timeExtractor
+		return nil
+	}
+}

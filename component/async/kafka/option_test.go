@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -149,4 +150,18 @@ func TestDecoderJSON(t *testing.T) {
 		reflect.ValueOf(json.DecodeRaw).Pointer(),
 		reflect.ValueOf(c.DecoderFunc).Pointer(),
 	)
+}
+
+func TestWithDurationOffset(t *testing.T) {
+	c := ConsumerConfig{}
+	f := func(_ *sarama.ConsumerMessage) (time.Time, error) {
+		return time.Time{}, nil
+	}
+
+	err := WithDurationOffset(time.Second, f)(&c)
+	assert.NoError(t, err)
+	assert.Equal(t, time.Second, c.DurationOffset)
+	assert.Equal(t,
+		runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name(),
+		runtime.FuncForPC(reflect.ValueOf(c.TimeExtractor).Pointer()).Name())
 }
