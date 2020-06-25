@@ -43,10 +43,14 @@ func (d durationClient) triggerWorkers(ctx context.Context, topic string, since 
 		partitionID := partitionID
 		go func() {
 			offset, err := d.getTimeBasedOffset(ctx, topic, since, partitionID, timeExtractor)
-			responseCh <- partitionOffsetResponse{
+			select {
+			case <-ctx.Done():
+				return
+			case responseCh <- partitionOffsetResponse{
 				partitionID: partitionID,
 				offset:      offset,
 				err:         err,
+			}:
 			}
 		}()
 	}
