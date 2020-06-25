@@ -209,7 +209,12 @@ func (c *consumer) partitionsSinceDuration(ctx context.Context) ([]sarama.Partit
 	pcs := make([]sarama.PartitionConsumer, len(partitions))
 
 	for i, partition := range partitions {
-		pc, err := c.ms.ConsumePartition(c.topic, partition, offsets[partition])
+		offset, exists := offsets[partition]
+		if !exists {
+			return nil, fmt.Errorf("partition %d unknown, this is most likely due to a repartitioning", partition)
+		}
+
+		pc, err := c.ms.ConsumePartition(c.topic, partition, offset)
 		if nil != err {
 			return nil, fmt.Errorf("failed to get partition consumer: %w", err)
 		}
