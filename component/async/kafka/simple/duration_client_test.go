@@ -14,17 +14,7 @@ import (
 func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 	topic := "topic"
 	since := mustCreateTime(t, "2020-01-01T12:00:00Z")
-	dummyClient := client(topic).
-		partitionIDs([]int32{0}, nil).
-		partition(0, partitionConfig{
-			oldest: offset{offset: 0},
-			newest: offset{offset: 10},
-			messages: map[int64]messageAtOffset{
-				4: {
-					msg: &sarama.ConsumerMessage{Timestamp: since},
-				},
-			},
-		}).build()
+	dummyClient := client(topic).partitionIDs([]int32{0}, nil).build()
 	// The message is invalid as the time extractor we use require a timestamp header
 	invalidMessage := &sarama.ConsumerMessage{}
 
@@ -94,8 +84,8 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 				}).build(),
 			expectedOffsets: map[int32]int64{
 				0: 4,
-				1: 2,
-				2: 7,
+				1: 3,
+				2: 8,
 			},
 		},
 		"success - all inside": {
@@ -107,19 +97,19 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 					newest: offset{offset: 10},
 					messages: map[int64]messageAtOffset{
 						0: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(5 * time.Hour)},
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(1 * time.Hour)},
 						},
 						1: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(6 * time.Hour)},
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(2 * time.Hour)},
 						},
 						2: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(7 * time.Hour)},
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(3 * time.Hour)},
 						},
 						3: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(8 * time.Hour)},
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(4 * time.Hour)},
 						},
 						4: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(9 * time.Hour)},
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(5 * time.Hour)},
 						},
 					},
 				}).build(),
@@ -136,27 +126,62 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 					newest: offset{offset: 10},
 					messages: map[int64]messageAtOffset{
 						4: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-10 * time.Hour)},
-						},
-						5: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-9 * time.Hour)},
-						},
-						6: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-8 * time.Hour)},
-						},
-						7: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-7 * time.Hour)},
-						},
-						8: {
 							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-6 * time.Hour)},
 						},
-						9: {
+						5: {
 							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-5 * time.Hour)},
+						},
+						6: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-4 * time.Hour)},
+						},
+						7: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-3 * time.Hour)},
+						},
+						8: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-2 * time.Hour)},
+						},
+						9: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-1 * time.Hour)},
 						},
 					},
 				}).build(),
 			expectedOffsets: map[int32]int64{
-				0: 9,
+				0: 10,
+			},
+		},
+		"success - out of range offset": {
+			globalTimeout: time.Second,
+			client: client(topic).
+				partitionIDs([]int32{0}, nil).
+				partition(0, partitionConfig{
+					oldest: offset{offset: 0},
+					newest: offset{offset: 10},
+					messages: map[int64]messageAtOffset{
+						4: {
+							msg: &sarama.ConsumerMessage{Timestamp: since},
+							err: &outOfRangeOffsetError{
+								message: "foo",
+							},
+						},
+						5: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-3 * time.Hour)},
+						},
+						6: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-2 * time.Hour)},
+						},
+						7: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-1 * time.Hour)},
+						},
+						8: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(1 * time.Hour)},
+						},
+						9: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(2 * time.Hour)},
+						},
+					},
+				}).build(),
+			expectedOffsets: map[int32]int64{
+				0: 8,
 			},
 		},
 		"error - get partitions": {
@@ -219,41 +244,6 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 					},
 				}).build(),
 			expectedErr: errors.New("error while retrieving message offset 4 on partition 0: foo"),
-		},
-		"error - out of range offset": {
-			globalTimeout: time.Second,
-			client: client(topic).
-				partitionIDs([]int32{0}, nil).
-				partition(0, partitionConfig{
-					oldest: offset{offset: 0},
-					newest: offset{offset: 10},
-					messages: map[int64]messageAtOffset{
-						4: {
-							msg: &sarama.ConsumerMessage{Timestamp: since},
-							err: &outOfRangeOffsetError{
-								message: "foo",
-							},
-						},
-						5: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-3 * time.Hour)},
-						},
-						6: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-2 * time.Hour)},
-						},
-						7: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-1 * time.Hour)},
-						},
-						8: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(1 * time.Hour)},
-						},
-						9: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(2 * time.Hour)},
-						},
-					},
-				}).build(),
-			expectedOffsets: map[int32]int64{
-				0: 7,
-			},
 		},
 	}
 	for name, tt := range testCases {

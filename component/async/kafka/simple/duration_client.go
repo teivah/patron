@@ -122,8 +122,5 @@ func (d durationClient) offsetBinarySearch(ctx context.Context, topic string, si
 		}
 	}
 
-	if left == 0 {
-		return 0, nil
-	}
-	return left - 1, nil
+	return left, nil
 }
