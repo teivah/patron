@@ -172,11 +172,8 @@ github.com/rs/zerolog/internal/json
 github.com/sirupsen/logrus
 # github.com/streadway/amqp v0.0.0-20180315184602-8e4aba63da9f
 github.com/streadway/amqp
-# github.com/stretchr/objx v0.1.1
-github.com/stretchr/objx
 # github.com/stretchr/testify v1.6.1
 github.com/stretchr/testify/assert
-github.com/stretchr/testify/mock
 github.com/stretchr/testify/require
 # github.com/uber/jaeger-client-go v2.22.1+incompatible
 github.com/uber/jaeger-client-go

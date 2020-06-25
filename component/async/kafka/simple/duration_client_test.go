@@ -8,7 +8,6 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -276,19 +275,22 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 }
 
 type clientBuilder struct {
-	mock  *clientMock
-	topic string
+	topic            string
+	partitions       []int32
+	partitionsError  error
+	partitionConfigs map[int32]partitionConfig
 }
 
-func client(topic string) clientBuilder {
-	return clientBuilder{
-		mock:  new(clientMock),
-		topic: topic,
+func client(topic string) *clientBuilder {
+	return &clientBuilder{
+		topic:            topic,
+		partitionConfigs: make(map[int32]partitionConfig),
 	}
 }
 
-func (c clientBuilder) partitionIDs(partitionIDs []int32, err error) clientBuilder {
-	c.mock.On("getPartitionIDs", c.topic).Return(partitionIDs, err)
+func (c *clientBuilder) partitionIDs(partitions []int32, err error) *clientBuilder {
+	c.partitions = partitions
+	c.partitionsError = err
 	return c
 }
 
@@ -308,43 +310,36 @@ type messageAtOffset struct {
 	err error
 }
 
-func (c clientBuilder) partition(partitionID int32, partitionConfig partitionConfig) clientBuilder {
-	c.mock.On("getOldestOffset", c.topic, partitionID).Return(partitionConfig.oldest.offset, partitionConfig.oldest.err)
-	c.mock.On("getNewestOffset", c.topic, partitionID).Return(partitionConfig.newest.offset, partitionConfig.newest.err)
-
-	for offset, message := range partitionConfig.messages {
-		c.mock.On("getMessageAtOffset", mock.Anything, c.topic, partitionID, offset).Return(message.msg, message.err)
-	}
-
+func (c *clientBuilder) partition(partitionID int32, partitionConfig partitionConfig) *clientBuilder {
+	c.partitionConfigs[partitionID] = partitionConfig
 	return c
 }
 
-func (c clientBuilder) build() *clientMock {
-	return c.mock
+func (c *clientBuilder) build() *clientMock {
+	return &clientMock{
+		builder: c,
+	}
 }
 
 type clientMock struct {
-	mock.Mock
+	builder *clientBuilder
 }
 
-func (c *clientMock) getPartitionIDs(topic string) ([]int32, error) {
-	args := c.Called(topic)
-	return args.Get(0).([]int32), args.Error(1)
+func (c *clientMock) getPartitionIDs(_ string) ([]int32, error) {
+	return c.builder.partitions, c.builder.partitionsError
 }
 
-func (c *clientMock) getOldestOffset(topic string, partitionID int32) (int64, error) {
-	args := c.Called(topic, partitionID)
-	return args.Get(0).(int64), args.Error(1)
+func (c *clientMock) getOldestOffset(_ string, partitionID int32) (int64, error) {
+	return c.builder.partitionConfigs[partitionID].oldest.offset, c.builder.partitionConfigs[partitionID].oldest.err
 }
 
-func (c *clientMock) getNewestOffset(topic string, partitionID int32) (int64, error) {
-	args := c.Called(topic, partitionID)
-	return args.Get(0).(int64), args.Error(1)
+func (c *clientMock) getNewestOffset(_ string, partitionID int32) (int64, error) {
+	return c.builder.partitionConfigs[partitionID].newest.offset, c.builder.partitionConfigs[partitionID].newest.err
 }
 
-func (c *clientMock) getMessageAtOffset(ctx context.Context, topic string, partitionID int32, offset int64) (*sarama.ConsumerMessage, error) {
-	args := c.Called(ctx, topic, partitionID, offset)
-	return args.Get(0).(*sarama.ConsumerMessage), args.Error(1)
+func (c *clientMock) getMessageAtOffset(_ context.Context, _ string, partitionID int32, offset int64) (*sarama.ConsumerMessage, error) {
+	cfg := c.builder.partitionConfigs[partitionID].messages[offset]
+	return cfg.msg, cfg.err
 }
 
 func mustCreateTime(t *testing.T, timestamp string) time.Time {
