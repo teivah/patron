@@ -32,7 +32,7 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 	testCases := map[string]struct {
 		globalTimeout   time.Duration
 		client          *clientMock
-		expectedOffsets map[int32]offsets
+		expectedOffsets map[int32]int64
 		expectedErr     error
 	}{
 		"success - multiple partitions": {
@@ -93,19 +93,10 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 						},
 					},
 				}).build(),
-			expectedOffsets: map[int32]offsets{
-				0: {
-					timeOffset:   4,
-					latestOffset: 9,
-				},
-				1: {
-					timeOffset:   2,
-					latestOffset: 9,
-				},
-				2: {
-					timeOffset:   7,
-					latestOffset: 9,
-				},
+			expectedOffsets: map[int32]int64{
+				0: 4,
+				1: 2,
+				2: 7,
 			},
 		},
 		"success - all inside": {
@@ -133,11 +124,8 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 						},
 					},
 				}).build(),
-			expectedOffsets: map[int32]offsets{
-				0: {
-					timeOffset:   0,
-					latestOffset: 9,
-				},
+			expectedOffsets: map[int32]int64{
+				0: 0,
 			},
 		},
 		"success - all outside": {
@@ -168,12 +156,15 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 						},
 					},
 				}).build(),
-			expectedOffsets: map[int32]offsets{
-				0: {
-					timeOffset:   9,
-					latestOffset: 9,
-				},
+			expectedOffsets: map[int32]int64{
+				0: 9,
 			},
+		},
+		"error - get partitions": {
+			globalTimeout: time.Second,
+			client: client(topic).
+				partitionIDs(nil, errors.New("foo")).build(),
+			expectedErr: errors.New("foo"),
 		},
 		"error - timeout": {
 			globalTimeout: time.Nanosecond,
@@ -261,11 +252,8 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 						},
 					},
 				}).build(),
-			expectedOffsets: map[int32]offsets{
-				0: {
-					timeOffset:   7,
-					latestOffset: 9,
-				},
+			expectedOffsets: map[int32]int64{
+				0: 7,
 			},
 		},
 	}

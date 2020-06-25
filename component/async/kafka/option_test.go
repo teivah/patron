@@ -160,6 +160,7 @@ func TestWithDurationOffset(t *testing.T) {
 
 	err := WithDurationOffset(time.Second, f)(&c)
 	assert.NoError(t, err)
+	assert.True(t, c.DurationBasedConsumer)
 	assert.Equal(t, time.Second, c.DurationOffset)
 	assert.Equal(t,
 		runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name(),

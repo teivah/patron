@@ -94,9 +94,19 @@ func (c *consumer) Consume(ctx context.Context) (<-chan async.Message, <-chan er
 	chErr := make(chan error, c.config.Buffer)
 
 	log.Infof("consuming messages from topic '%s' without using consumer group", c.topic)
-	pcs, err := c.partitions()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get partitions: %w", err)
+	var pcs []sarama.PartitionConsumer
+	if c.config.DurationBasedConsumer {
+		partitions, err := c.partitionsSinceDuration(ctx)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get partitions since duration: %w", err)
+		}
+		pcs = partitions
+	} else {
+		partitions, err := c.partitions()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get partitions: %w", err)
+		}
+		pcs = partitions
 	}
 	// When kafka cluster is not fully initialized, we may get 0 partitions.
 	if len(pcs) == 0 {
@@ -176,18 +186,17 @@ func (c *consumer) partitionsSinceDuration(ctx context.Context) ([]sarama.Partit
 	}
 	c.ms = consumer
 
-	durationClient, err := newDurationKafkaClient(client, consumer, c.config.SaramaConfig.Net.DialTimeout)
+	durationKafkaClient, err := newDurationKafkaClient(client, consumer, c.config.SaramaConfig.Net.DialTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kafka duration client: %w", err)
 	}
 
-	offset, err := newDurationClient(durationClient)
+	durationClient, err := newDurationClient(durationKafkaClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create duration client: %w", err)
 	}
 
-	offsets, err := offset.getTimeBasedOffsetsPerPartition(ctx, c.topic, time.Now().Add(-c.config.DurationOffset), c.config.TimeExtractor)
-	_ = offsets
+	offsets, err := durationClient.getTimeBasedOffsetsPerPartition(ctx, c.topic, time.Now().Add(-c.config.DurationOffset), c.config.TimeExtractor)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve duration offsets per partition: %w", err)
 	}
@@ -200,8 +209,7 @@ func (c *consumer) partitionsSinceDuration(ctx context.Context) ([]sarama.Partit
 	pcs := make([]sarama.PartitionConsumer, len(partitions))
 
 	for i, partition := range partitions {
-
-		pc, err := c.ms.ConsumePartition(c.topic, partition, c.config.SaramaConfig.Consumer.Offsets.Initial)
+		pc, err := c.ms.ConsumePartition(c.topic, partition, offsets[partition])
 		if nil != err {
 			return nil, fmt.Errorf("failed to get partition consumer: %w", err)
 		}

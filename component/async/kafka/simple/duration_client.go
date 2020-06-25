@@ -6,100 +6,124 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Shopify/sarama"
+	"github.com/beatlabs/patron/component/async/kafka"
+	"github.com/beatlabs/patron/log"
 )
 
-type outOfRangeOffsetError struct {
-	message string
+type durationClient struct {
+	client durationKafkaClientAPI
 }
 
-func (e *outOfRangeOffsetError) Error() string {
-	return e.message
-}
-
-func (e *outOfRangeOffsetError) Is(target error) bool {
-	_, ok := target.(*outOfRangeOffsetError)
-	return ok
-}
-
-type durationKafkaClientAPI interface {
-	getPartitionIDs(topic string) ([]int32, error)
-	getOldestOffset(topic string, partitionID int32) (int64, error)
-	getNewestOffset(topic string, partitionID int32) (int64, error)
-	getMessageAtOffset(ctx context.Context, topic string, partitionID int32, offset int64) (*sarama.ConsumerMessage, error)
-}
-
-type durationKafkaClient struct {
-	kafkaClient     sarama.Client
-	kafkaConsumer   sarama.Consumer
-	consumerTimeout time.Duration
-}
-
-func newDurationKafkaClient(kafkaClient sarama.Client, kafkaConsumer sarama.Consumer, consumerTimeout time.Duration) (durationKafkaClient, error) {
-	if kafkaClient == nil {
-		return durationKafkaClient{}, errors.New("kafka client is nil")
+func newDurationClient(client durationKafkaClientAPI) (durationClient, error) {
+	if client == nil {
+		return durationClient{}, errors.New("empty client api")
 	}
-	if kafkaConsumer == nil {
-		return durationKafkaClient{}, errors.New("kafka consumer is nil")
-	}
-
-	return durationKafkaClient{
-		kafkaClient:     kafkaClient,
-		kafkaConsumer:   kafkaConsumer,
-		consumerTimeout: consumerTimeout,
-	}, nil
+	return durationClient{client: client}, nil
 }
 
-func (c durationKafkaClient) getPartitionIDs(topic string) ([]int32, error) {
-	partitionIDs, err := c.kafkaConsumer.Partitions(topic)
+func (d durationClient) getTimeBasedOffsetsPerPartition(ctx context.Context, topic string, since time.Time, timeExtractor kafka.TimeExtractor) (map[int32]int64, error) {
+	partitionIDs, err := d.client.getPartitionIDs(topic)
 	if err != nil {
-		return nil, fmt.Errorf("unable to query Kafka to retrieve the partitions of the topic %s: %w", topic, err)
+		return nil, err
 	}
 
-	return partitionIDs, nil
+	responseCh := make(chan partitionOffsetResponse, 1)
+	d.triggerWorkers(ctx, topic, since, timeExtractor, partitionIDs, responseCh)
+	return d.aggregateResponses(ctx, partitionIDs, responseCh)
 }
 
-func (c durationKafkaClient) getOldestOffset(topic string, partitionID int32) (int64, error) {
-	offset, err := c.kafkaClient.GetOffset(topic, partitionID, sarama.OffsetOldest)
-	if err != nil {
-		return 0, fmt.Errorf("error while retrieving oldest offset of partition %d: %w", partitionID, err)
+type partitionOffsetResponse struct {
+	partitionID int32
+	offset      int64
+	err         error
+}
+
+func (d durationClient) triggerWorkers(ctx context.Context, topic string, since time.Time, timeExtractor kafka.TimeExtractor, partitionIDs []int32, responseCh chan<- partitionOffsetResponse) {
+	for _, partitionID := range partitionIDs {
+		partitionID := partitionID
+		go func() {
+			offset, err := d.getTimeBasedOffset(ctx, topic, since, partitionID, timeExtractor)
+			responseCh <- partitionOffsetResponse{
+				partitionID: partitionID,
+				offset:      offset,
+				err:         err,
+			}
+		}()
 	}
-	return offset, nil
 }
 
-func (c durationKafkaClient) getNewestOffset(topic string, partitionID int32) (int64, error) {
-	offset, err := c.kafkaClient.GetOffset(topic, partitionID, sarama.OffsetNewest)
-	if err != nil {
-		return 0, fmt.Errorf("error while retrieving newest offset of partition %d: %w", partitionID, err)
-	}
-	return offset, nil
-}
+func (d durationClient) aggregateResponses(ctx context.Context, partitionIDs []int32, responseCh <-chan partitionOffsetResponse) (map[int32]int64, error) {
+	numberOfPartitions := len(partitionIDs)
+	offsets := make(map[int32]int64, numberOfPartitions)
+	numberOfResponses := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("context cancelled before collecting partition responses: %w", ctx.Err())
+		case response := <-responseCh:
+			if response.err != nil {
+				return nil, response.err
+			}
 
-func (c durationKafkaClient) getMessageAtOffset(ctx context.Context, topic string, partitionID int32, offset int64) (*sarama.ConsumerMessage, error) {
-	pc, err := c.kafkaConsumer.ConsumePartition(topic, partitionID, offset)
-	if err != nil {
-		if err == sarama.ErrOffsetOutOfRange {
-			closePartitionConsumer(pc)
-			return nil, &outOfRangeOffsetError{
-				message: err.Error(),
+			offsets[response.partitionID] = response.offset
+			numberOfResponses++
+			if numberOfResponses == numberOfPartitions {
+				return offsets, nil
 			}
 		}
-
-		return nil, fmt.Errorf("error while creating partition consumer on partition %d, offset %d: %w", partitionID, offset, err)
 	}
-
-	defer closePartitionConsumer(pc)
-	return c.consumeSingleMessage(ctx, pc)
 }
 
-func (c durationKafkaClient) consumeSingleMessage(ctx context.Context, pc sarama.PartitionConsumer) (*sarama.ConsumerMessage, error) {
-	ctx, cancel := context.WithTimeout(ctx, c.consumerTimeout)
-	defer cancel()
-
-	select {
-	case <-ctx.Done():
-		return nil, fmt.Errorf("error while consuming message: %w", ctx.Err())
-	case msg := <-pc.Messages():
-		return msg, nil
+func (d durationClient) getTimeBasedOffset(ctx context.Context, topic string, since time.Time, partitionID int32, timeExtractor kafka.TimeExtractor) (int64, error) {
+	left, err := d.client.getOldestOffset(topic, partitionID)
+	if err != nil {
+		return 0, err
 	}
+
+	newestOffset, err := d.client.getNewestOffset(topic, partitionID)
+	if err != nil {
+		return 0, err
+	}
+	// The right boundary must be inclusive
+	right := newestOffset - 1
+
+	return d.offsetBinarySearch(ctx, topic, since, partitionID, timeExtractor, left, right)
+}
+
+func (d durationClient) offsetBinarySearch(ctx context.Context, topic string, since time.Time, partitionID int32, timeExtractor kafka.TimeExtractor, left, right int64) (int64, error) {
+	for left <= right {
+		mid := left + (right-left)/2
+
+		msg, err := d.client.getMessageAtOffset(ctx, topic, partitionID, mid)
+		if err != nil {
+			// Under extraordinary circumstances (e.g. the retention policy being applied just before retrieving the message at a particular offset),
+			// the offset might not be accessible anymore.
+			// In this case, we simply log a warning and restrict the interval to the right.
+			if errors.Is(err, &outOfRangeOffsetError{}) {
+				log.Warnf("offset %d on partition %d is out of range: %v", mid, partitionID, err)
+				left = mid + 1
+				continue
+			}
+			return 0, fmt.Errorf("error while retrieving message offset %d on partition %d: %w", mid, partitionID, err)
+		}
+
+		t, err := timeExtractor(msg)
+		if err != nil {
+			return 0, fmt.Errorf("error while executing comparator: %w", err)
+		}
+
+		if t.Equal(since) {
+			return mid, nil
+		}
+		if t.Before(since) {
+			left = mid + 1
+		} else {
+			right = mid - 1
+		}
+	}
+
+	if left == 0 {
+		return 0, nil
+	}
+	return left - 1, nil
 }
