@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/beatlabs/patron/component/async"
@@ -143,6 +144,53 @@ func (c *consumer) partitions() ([]sarama.PartitionConsumer, error) {
 		return nil, fmt.Errorf("failed to create simple consumer: %w", err)
 	}
 	c.ms = ms
+
+	partitions, err := c.ms.Partitions(c.topic)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get partitions: %w", err)
+	}
+
+	pcs := make([]sarama.PartitionConsumer, len(partitions))
+
+	for i, partition := range partitions {
+
+		pc, err := c.ms.ConsumePartition(c.topic, partition, c.config.SaramaConfig.Consumer.Offsets.Initial)
+		if nil != err {
+			return nil, fmt.Errorf("failed to get partition consumer: %w", err)
+		}
+		pcs[i] = pc
+	}
+
+	return pcs, nil
+}
+
+func (c *consumer) partitionsSinceDuration(ctx context.Context) ([]sarama.PartitionConsumer, error) {
+	client, err := sarama.NewClient(c.config.Brokers, c.config.SaramaConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client: %w", err)
+	}
+
+	consumer, err := sarama.NewConsumerFromClient(client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create simple consumer: %w", err)
+	}
+	c.ms = consumer
+
+	durationClient, err := newDurationKafkaClient(client, consumer, c.config.SaramaConfig.Net.DialTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kafka duration client: %w", err)
+	}
+
+	offset, err := newDurationClient(durationClient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create duration client: %w", err)
+	}
+
+	offsets, err := offset.getTimeBasedOffsetsPerPartition(ctx, c.topic, time.Now().Add(-c.config.DurationOffset), c.config.TimeExtractor)
+	_ = offsets
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve duration offsets per partition: %w", err)
+	}
 
 	partitions, err := c.ms.Partitions(c.topic)
 	if err != nil {

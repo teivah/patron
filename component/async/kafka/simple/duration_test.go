@@ -21,7 +21,7 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 			oldest: offset{offset: 0},
 			newest: offset{offset: 10},
 			messages: map[int64]messageAtOffset{
-				5: {
+				4: {
 					msg: &sarama.ConsumerMessage{Timestamp: since},
 				},
 			},
@@ -32,7 +32,7 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 	testCases := map[string]struct {
 		globalTimeout   time.Duration
 		client          *clientMock
-		expectedOffsets map[int32]int64
+		expectedOffsets map[int32]offsets
 		expectedErr     error
 	}{
 		"success - multiple partitions": {
@@ -43,7 +43,7 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 					oldest: offset{offset: 0},
 					newest: offset{offset: 10},
 					messages: map[int64]messageAtOffset{
-						5: {
+						4: {
 							msg: &sarama.ConsumerMessage{Timestamp: since},
 						},
 					},
@@ -67,15 +67,15 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 						4: {
 							msg: &sarama.ConsumerMessage{Timestamp: since.Add(2 * time.Hour)},
 						},
-						5: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(3 * time.Hour)},
-						},
 					},
 				}).
 				partition(2, partitionConfig{
 					oldest: offset{offset: 0},
 					newest: offset{offset: 10},
 					messages: map[int64]messageAtOffset{
+						4: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-4 * time.Hour)},
+						},
 						5: {
 							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-3 * time.Hour)},
 						},
@@ -91,15 +91,88 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 						9: {
 							msg: &sarama.ConsumerMessage{Timestamp: since.Add(2 * time.Hour)},
 						},
-						10: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(3 * time.Hour)},
+					},
+				}).build(),
+			expectedOffsets: map[int32]offsets{
+				0: {
+					timeOffset:   4,
+					latestOffset: 9,
+				},
+				1: {
+					timeOffset:   2,
+					latestOffset: 9,
+				},
+				2: {
+					timeOffset:   7,
+					latestOffset: 9,
+				},
+			},
+		},
+		"success - all inside": {
+			globalTimeout: time.Second,
+			client: client(topic).
+				partitionIDs([]int32{0}, nil).
+				partition(0, partitionConfig{
+					oldest: offset{offset: 0},
+					newest: offset{offset: 10},
+					messages: map[int64]messageAtOffset{
+						0: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(5 * time.Hour)},
+						},
+						1: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(6 * time.Hour)},
+						},
+						2: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(7 * time.Hour)},
+						},
+						3: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(8 * time.Hour)},
+						},
+						4: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(9 * time.Hour)},
 						},
 					},
 				}).build(),
-			expectedOffsets: map[int32]int64{
-				0: 5,
-				1: 2,
-				2: 7,
+			expectedOffsets: map[int32]offsets{
+				0: {
+					timeOffset:   0,
+					latestOffset: 9,
+				},
+			},
+		},
+		"success - all outside": {
+			globalTimeout: time.Second,
+			client: client(topic).
+				partitionIDs([]int32{0}, nil).
+				partition(0, partitionConfig{
+					oldest: offset{offset: 0},
+					newest: offset{offset: 10},
+					messages: map[int64]messageAtOffset{
+						4: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-10 * time.Hour)},
+						},
+						5: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-9 * time.Hour)},
+						},
+						6: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-8 * time.Hour)},
+						},
+						7: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-7 * time.Hour)},
+						},
+						8: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-6 * time.Hour)},
+						},
+						9: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-5 * time.Hour)},
+						},
+					},
+				}).build(),
+			expectedOffsets: map[int32]offsets{
+				0: {
+					timeOffset:   9,
+					latestOffset: 9,
+				},
 			},
 		},
 		"error - timeout": {
@@ -134,7 +207,7 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 					oldest: offset{offset: 0},
 					newest: offset{offset: 10},
 					messages: map[int64]messageAtOffset{
-						5: {
+						4: {
 							msg: invalidMessage,
 						},
 					},
@@ -149,13 +222,13 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 					oldest: offset{offset: 0},
 					newest: offset{offset: 10},
 					messages: map[int64]messageAtOffset{
-						5: {
+						4: {
 							msg: &sarama.ConsumerMessage{Timestamp: since},
 							err: errors.New("foo"),
 						},
 					},
 				}).build(),
-			expectedErr: errors.New("error while retrieving message offset 5 on partition 0: foo"),
+			expectedErr: errors.New("error while retrieving message offset 4 on partition 0: foo"),
 		},
 		"error - out of range offset": {
 			globalTimeout: time.Second,
@@ -165,11 +238,14 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 					oldest: offset{offset: 0},
 					newest: offset{offset: 10},
 					messages: map[int64]messageAtOffset{
-						5: {
+						4: {
 							msg: &sarama.ConsumerMessage{Timestamp: since},
 							err: &outOfRangeOffsetError{
 								message: "foo",
 							},
+						},
+						5: {
+							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-3 * time.Hour)},
 						},
 						6: {
 							msg: &sarama.ConsumerMessage{Timestamp: since.Add(-2 * time.Hour)},
@@ -183,19 +259,19 @@ func Test_Consumer_GetTimeBasedOffsetsPerPartition(t *testing.T) {
 						9: {
 							msg: &sarama.ConsumerMessage{Timestamp: since.Add(2 * time.Hour)},
 						},
-						10: {
-							msg: &sarama.ConsumerMessage{Timestamp: since.Add(3 * time.Hour)},
-						},
 					},
 				}).build(),
-			expectedOffsets: map[int32]int64{
-				0: 7,
+			expectedOffsets: map[int32]offsets{
+				0: {
+					timeOffset:   7,
+					latestOffset: 9,
+				},
 			},
 		},
 	}
 	for name, tt := range testCases {
 		t.Run(name, func(t *testing.T) {
-			consumer, err := newDurationOffset(tt.client)
+			consumer, err := newDurationClient(tt.client)
 			require.NoError(t, err)
 			ctx, cancel := context.WithTimeout(context.Background(), tt.globalTimeout)
 			defer cancel()

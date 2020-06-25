@@ -2,6 +2,7 @@ package simple
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -21,21 +22,36 @@ func (e *outOfRangeOffsetError) Is(target error) bool {
 	return ok
 }
 
-type durationClientAPI interface {
+type durationKafkaClientAPI interface {
 	getPartitionIDs(topic string) ([]int32, error)
 	getOldestOffset(topic string, partitionID int32) (int64, error)
 	getNewestOffset(topic string, partitionID int32) (int64, error)
 	getMessageAtOffset(ctx context.Context, topic string, partitionID int32, offset int64) (*sarama.ConsumerMessage, error)
 }
 
-type durationClient struct {
+type durationKafkaClient struct {
 	kafkaClient     sarama.Client
 	kafkaConsumer   sarama.Consumer
 	consumerTimeout time.Duration
 }
 
-func (c durationClient) getPartitionIDs(topic string) ([]int32, error) {
-	partitionIDs, err := c.kafkaClient.Partitions(topic)
+func newDurationKafkaClient(kafkaClient sarama.Client, kafkaConsumer sarama.Consumer, consumerTimeout time.Duration) (durationKafkaClient, error) {
+	if kafkaClient == nil {
+		return durationKafkaClient{}, errors.New("kafka client is nil")
+	}
+	if kafkaConsumer == nil {
+		return durationKafkaClient{}, errors.New("kafka consumer is nil")
+	}
+
+	return durationKafkaClient{
+		kafkaClient:     kafkaClient,
+		kafkaConsumer:   kafkaConsumer,
+		consumerTimeout: consumerTimeout,
+	}, nil
+}
+
+func (c durationKafkaClient) getPartitionIDs(topic string) ([]int32, error) {
+	partitionIDs, err := c.kafkaConsumer.Partitions(topic)
 	if err != nil {
 		return nil, fmt.Errorf("unable to query Kafka to retrieve the partitions of the topic %s: %w", topic, err)
 	}
@@ -43,7 +59,7 @@ func (c durationClient) getPartitionIDs(topic string) ([]int32, error) {
 	return partitionIDs, nil
 }
 
-func (c durationClient) getOldestOffset(topic string, partitionID int32) (int64, error) {
+func (c durationKafkaClient) getOldestOffset(topic string, partitionID int32) (int64, error) {
 	offset, err := c.kafkaClient.GetOffset(topic, partitionID, sarama.OffsetOldest)
 	if err != nil {
 		return 0, fmt.Errorf("error while retrieving oldest offset of partition %d: %w", partitionID, err)
@@ -51,7 +67,7 @@ func (c durationClient) getOldestOffset(topic string, partitionID int32) (int64,
 	return offset, nil
 }
 
-func (c durationClient) getNewestOffset(topic string, partitionID int32) (int64, error) {
+func (c durationKafkaClient) getNewestOffset(topic string, partitionID int32) (int64, error) {
 	offset, err := c.kafkaClient.GetOffset(topic, partitionID, sarama.OffsetNewest)
 	if err != nil {
 		return 0, fmt.Errorf("error while retrieving newest offset of partition %d: %w", partitionID, err)
@@ -59,7 +75,7 @@ func (c durationClient) getNewestOffset(topic string, partitionID int32) (int64,
 	return offset, nil
 }
 
-func (c durationClient) getMessageAtOffset(ctx context.Context, topic string, partitionID int32, offset int64) (*sarama.ConsumerMessage, error) {
+func (c durationKafkaClient) getMessageAtOffset(ctx context.Context, topic string, partitionID int32, offset int64) (*sarama.ConsumerMessage, error) {
 	pc, err := c.kafkaConsumer.ConsumePartition(topic, partitionID, offset)
 	if err != nil {
 		if err == sarama.ErrOffsetOutOfRange {
@@ -76,7 +92,7 @@ func (c durationClient) getMessageAtOffset(ctx context.Context, topic string, pa
 	return c.consumeSingleMessage(ctx, pc)
 }
 
-func (c durationClient) consumeSingleMessage(ctx context.Context, pc sarama.PartitionConsumer) (*sarama.ConsumerMessage, error) {
+func (c durationKafkaClient) consumeSingleMessage(ctx context.Context, pc sarama.PartitionConsumer) (*sarama.ConsumerMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.consumerTimeout)
 	defer cancel()
 
