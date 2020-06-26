@@ -95,6 +95,12 @@ func DecoderJSON() OptionFunc {
 // It accepts a function indicating how to extract the time from a Kafka message.
 func WithDurationOffset(since time.Duration, timeExtractor TimeExtractor) OptionFunc {
 	return func(c *ConsumerConfig) error {
+		if since < 0 {
+			return errors.New("duration must be positive")
+		}
+		if timeExtractor == nil {
+			return errors.New("empty time extractor function")
+		}
 		c.DurationBasedConsumer = true
 		c.DurationOffset = since
 		c.TimeExtractor = timeExtractor
