@@ -27,7 +27,7 @@ func (d durationClient) getTimeBasedOffsetsPerPartition(ctx context.Context, top
 		return nil, err
 	}
 
-	responseCh := make(chan partitionOffsetResponse, 1)
+	responseCh := make(chan partitionOffsetResponse, len(partitionIDs))
 	d.triggerWorkers(ctx, topic, since, timeExtractor, partitionIDs, responseCh)
 	return d.aggregateResponses(ctx, partitionIDs, responseCh)
 }
