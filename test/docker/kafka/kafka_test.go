@@ -25,6 +25,7 @@ const (
 	zookeeperPort = "2181"
 	simpleTopic1  = "simpleTopic1"
 	simpleTopic2  = "simpleTopic2"
+	simpleTopic3  = "simpleTopic3"
 	groupTopic1   = "groupTopic1"
 	groupTopic2   = "groupTopic2"
 )
