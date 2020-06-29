@@ -13,8 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const maxWait = 5 * time.Second
-
 func TestSimpleConsume(t *testing.T) {
 	sent := []string{"one", "two", "three"}
 	chMessages := make(chan []string)
@@ -45,8 +43,6 @@ func TestSimpleConsume(t *testing.T) {
 
 		chMessages <- received
 	}()
-
-	time.Sleep(maxWait)
 
 	messages := make([]*sarama.ProducerMessage, 0, len(sent))
 	for _, val := range sent {
@@ -96,8 +92,6 @@ func TestSimpleConsume_ClaimMessageError(t *testing.T) {
 
 		chMessages <- received
 	}()
-
-	time.Sleep(maxWait)
 
 	err := sendMessages(getProducerMessage(simpleTopic2, "123"))
 	require.NoError(t, err)
@@ -155,8 +149,6 @@ func TestSimpleConsume_WithDurationOffset(t *testing.T) {
 
 		chMessages <- received
 	}()
-
-	time.Sleep(maxWait)
 
 	var received []string
 

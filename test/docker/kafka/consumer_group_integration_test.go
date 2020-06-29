@@ -4,7 +4,6 @@ package kafka
 
 import (
 	"testing"
-	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/beatlabs/patron/component/async/kafka"
@@ -36,7 +35,7 @@ func TestGroupConsume(t *testing.T) {
 			_ = consumer.Close()
 		}()
 
-		received, err := consumeMessages(consumer, len(sent))
+		received, err := consumeMessages(consumer, len(sent), maxWait)
 		if err != nil {
 			chErr <- err
 			return
@@ -44,8 +43,6 @@ func TestGroupConsume(t *testing.T) {
 
 		chMessages <- received
 	}()
-
-	time.Sleep(5 * time.Second)
 
 	messages := make([]*sarama.ProducerMessage, 0, len(sent))
 	for _, val := range sent {
@@ -87,7 +84,7 @@ func TestGroupConsume_ClaimMessageError(t *testing.T) {
 			_ = consumer.Close()
 		}()
 
-		received, err := consumeMessages(consumer, 1)
+		received, err := consumeMessages(consumer, 1, maxWait)
 		if err != nil {
 			chErr <- err
 			return
@@ -95,8 +92,6 @@ func TestGroupConsume_ClaimMessageError(t *testing.T) {
 
 		chMessages <- received
 	}()
-
-	time.Sleep(5 * time.Second)
 
 	err := sendMessages(getProducerMessage(groupTopic2, "321"))
 	require.NoError(t, err)
