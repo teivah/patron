@@ -66,7 +66,7 @@ func (f *Factory) Create() (async.Consumer, error) {
 		}
 	}
 
-	if cc.DurationBasedConsumer {
+	if c.config.DurationBasedConsumer {
 		c.partitions = c.partitionsSinceDuration
 	}
 
