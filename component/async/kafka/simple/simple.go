@@ -215,7 +215,7 @@ func (c *consumer) partitionsSinceDuration(ctx context.Context) ([]sarama.Partit
 		}
 
 		pc, err := c.ms.ConsumePartition(c.topic, partition, offset)
-		if nil != err {
+		if err != nil {
 			return nil, fmt.Errorf("failed to get partition consumer: %w", err)
 		}
 		pcs[i] = pc
