@@ -36,7 +36,7 @@ func TestGroupConsume(t *testing.T) {
 			_ = consumer.Close()
 		}()
 
-		received, err := consumeMessages(consumer, len(sent), maxWait)
+		received, err := consumeMessages(consumer, len(sent))
 		if err != nil {
 			chErr <- err
 			return
@@ -87,7 +87,7 @@ func TestGroupConsume_ClaimMessageError(t *testing.T) {
 			_ = consumer.Close()
 		}()
 
-		received, err := consumeMessages(consumer, 1, maxWait)
+		received, err := consumeMessages(consumer, 1)
 		if err != nil {
 			chErr <- err
 			return

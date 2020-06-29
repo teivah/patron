@@ -176,8 +176,9 @@ func getTopic(name string) string {
 	return fmt.Sprintf("%s:1:1", name)
 }
 
-func consumeMessages(consumer async.Consumer, expectedMessageCount int, timeout time.Duration) ([]string, error) {
-	ctx, cnl := context.WithTimeout(context.Background(), timeout)
+func consumeMessages(consumer async.Consumer, expectedMessageCount int) ([]string, error) {
+
+	ctx, cnl := context.WithCancel(context.Background())
 	defer cnl()
 
 	ch, chErr, err := consumer.Consume(ctx)
