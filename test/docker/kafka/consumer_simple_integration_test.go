@@ -44,6 +44,8 @@ func TestSimpleConsume(t *testing.T) {
 		chMessages <- received
 	}()
 
+	time.Sleep(maxWait)
+
 	messages := make([]*sarama.ProducerMessage, 0, len(sent))
 	for _, val := range sent {
 		messages = append(messages, getProducerMessage(simpleTopic1, val))
@@ -92,6 +94,8 @@ func TestSimpleConsume_ClaimMessageError(t *testing.T) {
 
 		chMessages <- received
 	}()
+
+	time.Sleep(maxWait)
 
 	err := sendMessages(getProducerMessage(simpleTopic2, "123"))
 	require.NoError(t, err)
@@ -149,6 +153,8 @@ func TestSimpleConsume_WithDurationOffset(t *testing.T) {
 
 		chMessages <- received
 	}()
+
+	time.Sleep(maxWait)
 
 	var received []string
 
