@@ -28,7 +28,6 @@ const (
 	simpleTopic3  = "simpleTopic3"
 	groupTopic1   = "groupTopic1"
 	groupTopic2   = "groupTopic2"
-	maxWait       = 5 * time.Second
 )
 
 func TestMain(m *testing.M) {
