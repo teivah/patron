@@ -57,6 +57,7 @@ func (f *Factory) Create() (async.Consumer, error) {
 		topic:  f.topic,
 		config: cc,
 	}
+	c.partitions = c.partitionsFromOffset
 
 	for _, o := range f.oo {
 		err = o(&c.config)
@@ -67,8 +68,6 @@ func (f *Factory) Create() (async.Consumer, error) {
 
 	if cc.DurationBasedConsumer {
 		c.partitions = c.partitionsSinceDuration
-	} else {
-		c.partitions = c.partitionsFromOffset
 	}
 
 	return c, nil
