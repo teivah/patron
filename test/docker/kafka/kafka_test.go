@@ -175,9 +175,8 @@ func getTopic(name string) string {
 	return fmt.Sprintf("%s:1:1", name)
 }
 
-func consumeMessages(consumer async.Consumer, expectedMessageCount int) ([]string, error) {
-
-	ctx, cnl := context.WithCancel(context.Background())
+func consumeMessages(consumer async.Consumer, expectedMessageCount int, timeout time.Duration) ([]string, error) {
+	ctx, cnl := context.WithTimeout(context.Background(), timeout)
 	defer cnl()
 
 	ch, chErr, err := consumer.Consume(ctx)
@@ -189,6 +188,8 @@ func consumeMessages(consumer async.Consumer, expectedMessageCount int) ([]strin
 
 	for {
 		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case msg := <-ch:
 			received = append(received, string(msg.Payload()))
 			expectedMessageCount--
