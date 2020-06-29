@@ -65,15 +65,22 @@ func (f *Factory) Create() (async.Consumer, error) {
 		}
 	}
 
+	if cc.DurationBasedConsumer {
+		c.partitions = c.partitionsSinceDuration
+	} else {
+		c.partitions = c.partitionsFromOffset
+	}
+
 	return c, nil
 }
 
 // consumer members can be injected or overwritten with the usage of OptionFunc arguments.
 type consumer struct {
-	topic  string
-	cnl    context.CancelFunc
-	ms     sarama.Consumer
-	config kafka.ConsumerConfig
+	topic      string
+	cnl        context.CancelFunc
+	ms         sarama.Consumer
+	config     kafka.ConsumerConfig
+	partitions func(context.Context) ([]sarama.PartitionConsumer, error)
 }
 
 // Close handles closing consumer.
@@ -95,19 +102,12 @@ func (c *consumer) Consume(ctx context.Context) (<-chan async.Message, <-chan er
 
 	log.Infof("consuming messages from topic '%s' without using consumer group", c.topic)
 	var pcs []sarama.PartitionConsumer
-	if c.config.DurationBasedConsumer {
-		partitions, err := c.partitionsSinceDuration(ctx)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get partitions since duration: %w", err)
-		}
-		pcs = partitions
-	} else {
-		partitions, err := c.partitions()
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get partitions: %w", err)
-		}
-		pcs = partitions
+
+	pcs, err := c.partitions(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get partitions since duration: %w", err)
 	}
+
 	// When kafka cluster is not fully initialized, we may get 0 partitions.
 	if len(pcs) == 0 {
 		return nil, nil, errors.New("got 0 partitions")
@@ -147,7 +147,7 @@ func (c *consumer) Consume(ctx context.Context) (<-chan async.Message, <-chan er
 	return chMsg, chErr, nil
 }
 
-func (c *consumer) partitions() ([]sarama.PartitionConsumer, error) {
+func (c *consumer) partitionsFromOffset(_ context.Context) ([]sarama.PartitionConsumer, error) {
 
 	ms, err := sarama.NewConsumer(c.config.Brokers, c.config.SaramaConfig)
 	if err != nil {
