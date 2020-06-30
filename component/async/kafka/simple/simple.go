@@ -122,7 +122,7 @@ func (c *consumer) Consume(ctx context.Context) (<-chan async.Message, <-chan er
 					if err != nil {
 						kafka.MessageStatusCountInc(kafka.MessageClaimErrors, "", m.Topic)
 						chErr <- err
-						return
+						continue
 					}
 					kafka.MessageStatusCountInc(kafka.MessageDecoded, "", m.Topic)
 					chMsg <- msg
