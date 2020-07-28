@@ -118,7 +118,8 @@ func TestSpanLogError(t *testing.T) {
 	})
 	errorHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("foo"))
+		_, err := w.Write([]byte("foo"))
+		require.NoError(t, err)
 	})
 
 	r, err := http.NewRequest("POST", "/test", nil)
