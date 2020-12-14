@@ -12,9 +12,9 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/elastic/go-elasticsearch/v8 v8.0.0-20190731061900-ea052088db25
-	github.com/go-redis/redis/v7 v7.0.0-beta.5
+	github.com/go-redis/redis/v8 v8.4.2
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/golang/protobuf v1.3.2
+	github.com/golang/protobuf v1.4.2
 	github.com/google/uuid v1.1.0
 	github.com/gotestyourself/gotestyourself v2.2.0+incompatible // indirect
 	github.com/hashicorp/golang-lru v0.5.3
@@ -28,7 +28,7 @@ require (
 	github.com/prometheus/client_golang v1.5.1
 	github.com/rs/zerolog v1.5.0
 	github.com/streadway/amqp v0.0.0-20180315184602-8e4aba63da9f
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.6.1
 	github.com/uber/jaeger-client-go v2.22.1+incompatible
 	github.com/uber/jaeger-lib v2.2.0+incompatible
 	go.uber.org/atomic v1.6.0 // indirect
