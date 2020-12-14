@@ -55,9 +55,7 @@ func TestProtobuf(t *testing.T) {
 	assert.Equal(t, int32(0), test1.GetType())
 	assert.Equal(t, []int64(nil), test1.GetReps())
 
-	test.XXX_DiscardUnknown()
-	test.XXX_Merge(&test1)
-	assert.Equal(t, "label:\"hello\" type:17 reps:1 reps:2 reps:3 ", test.String())
+	assert.Equal(t, "label:\"hello\"  type:17  reps:1  reps:2  reps:3", test.String())
 	b, c := test.Descriptor()
 	assert.NotEmpty(t, b)
 	assert.Len(t, c, 1)
