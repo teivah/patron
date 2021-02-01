@@ -210,7 +210,7 @@ func Test_handleError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rsp := httptest.NewRecorder()
-			handleError(log.Sub(nil), rsp, tt.args.enc, tt.args.err)
+			handleError(log.Sub(nil), rsp, tt.args.enc, tt.args.err, "")
 			assert.Equal(t, tt.expectedCode, rsp.Code)
 		})
 	}
@@ -275,7 +275,7 @@ func Test_handler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rsp := httptest.NewRecorder()
-			handler(tt.args.hnd).ServeHTTP(rsp, tt.args.req)
+			handler(tt.args.hnd, "").ServeHTTP(rsp, tt.args.req)
 			assert.Equal(t, tt.expectedCode, rsp.Code)
 		})
 	}
