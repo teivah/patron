@@ -13,7 +13,7 @@ var statusCodes []statusCode
 
 func init() {
 	cfg, _ := os.LookupEnv("PATRON_HTTP_STATUS_ERROR_LOGGING")
-	c, err := parseStatusCodes(cfg)
+	c, err := parseStatusCodes(strings.TrimSpace(cfg))
 	if err != nil {
 		log.Fatalf("failed to parse status codes %q: %v", cfg, err)
 	}
@@ -129,7 +129,7 @@ func parseStartInterval(c uint8) (intervalType, error) {
 	} else if c == '(' {
 		return excluded, nil
 	}
-	return 0, fmt.Errorf(`invalid interval type %c, expected " or '`, c)
+	return 0, fmt.Errorf(`invalid interval type %c, expected [ or (`, c)
 }
 
 func parseEndInterval(c uint8) (intervalType, error) {
@@ -138,7 +138,7 @@ func parseEndInterval(c uint8) (intervalType, error) {
 	} else if c == ')' {
 		return excluded, nil
 	}
-	return 0, fmt.Errorf(`invalid interval type %c, expected " or '`, c)
+	return 0, fmt.Errorf(`invalid interval type %c, expected ] or )`, c)
 }
 
 func shouldLog(statusCode int, codes []statusCode) bool {
