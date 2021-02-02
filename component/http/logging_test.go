@@ -52,12 +52,12 @@ func TestStatusCode(t *testing.T) {
 }
 
 func BenchmarkName(b *testing.B) {
-	handler, err := newStatusCodeLoggerHandler(complexConfig)
+	h, err := newStatusCodeLoggerHandler(complexConfig)
 	assert.NoError(b, err)
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = handler.shouldLog(403)
+		_ = h.shouldLog(403)
 	}
 }

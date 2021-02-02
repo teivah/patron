@@ -13,7 +13,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-func handler(hnd ProcessorFunc) http.HandlerFunc {
+func handler(hnd ProcessorFunc, path string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ct, dec, enc, err := determineEncoding(r.Header)
 		if err != nil {
@@ -41,7 +41,7 @@ func handler(hnd ProcessorFunc) http.HandlerFunc {
 
 		rsp, err := hnd(ctx, req)
 		if err != nil {
-			handleError(logger, w, enc, err)
+			handleError(logger, w, enc, err, path)
 			return
 		}
 
@@ -180,7 +180,7 @@ func handleSuccess(w http.ResponseWriter, r *http.Request, rsp *Response, enc en
 	return err
 }
 
-func handleError(logger log.Logger, w http.ResponseWriter, enc encoding.EncodeFunc, err error) {
+func handleError(logger log.Logger, w http.ResponseWriter, enc encoding.EncodeFunc, err error, path string) {
 	// Assert error to type Error in order to leverage the code and Payload values that such errors contain.
 	if err, ok := err.(*Error); ok {
 		p, encErr := enc(err.payload)
@@ -192,17 +192,17 @@ func handleError(logger log.Logger, w http.ResponseWriter, enc encoding.EncodeFu
 		if _, err := w.Write(p); err != nil {
 			logger.Errorf("failed to write Response: %v", err)
 		}
-		handleLogging(logger, err.code, err.payload)
+		handleLogging(logger, err.code, err.payload, path)
 		return
 	}
 	// Using http.Error helper hijacks the content type Header of the Response returning plain text Payload.
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	handleLogging(logger, http.StatusInternalServerError, err)
+	handleLogging(logger, http.StatusInternalServerError, err, path)
 }
 
-func handleLogging(logger log.Logger, statusCode int, payload interface{}) {
+func handleLogging(logger log.Logger, statusCode int, payload interface{}, path string) {
 	if statusCodeLogger.shouldLog(statusCode) {
-		logger.Error("request error: code=%d, payload=%v", statusCode, payload)
+		logger.Error("%s %d error: %v", path, statusCode, payload)
 	}
 }
 
