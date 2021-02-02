@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -9,15 +10,111 @@ import (
 	"github.com/beatlabs/patron/log"
 )
 
-var statusCodes []statusCode
+var statusCodeLogger statusCodeLoggerHandler
+
+type intervalType uint32
+
+const (
+	included intervalType = iota // '[' or ']'
+	excluded                     // '(' or ')'
+)
 
 func init() {
 	cfg, _ := os.LookupEnv("PATRON_HTTP_STATUS_ERROR_LOGGING")
-	c, err := parseStatusCodes(strings.TrimSpace(cfg))
+	h, err := newStatusCodeLoggerHandler(strings.TrimSpace(cfg))
 	if err != nil {
 		log.Fatalf("failed to parse status codes %q: %v", cfg, err)
 	}
-	statusCodes = c
+	statusCodeLogger = h
+}
+
+func newStatusCodeLoggerHandler(cfg string) (statusCodeLoggerHandler, error) {
+	splits := strings.Split(cfg, ";")
+	codes := make([]statusCode, len(splits))
+
+	for idx, split := range splits {
+		i, err := strconv.Atoi(split)
+		isNumber := err == nil
+
+		if isNumber {
+			codes[idx] = statusCode{
+				exactCode: i,
+			}
+		} else {
+			codeRange, err := parseRange(split)
+			if err != nil {
+				return statusCodeLoggerHandler{}, fmt.Errorf("failed to parse status code range %q: %w", split, err)
+			}
+
+			codes[idx] = statusCode{
+				rangeCodes: &codeRange,
+			}
+		}
+	}
+	return statusCodeLoggerHandler{
+		codes: codes,
+	}, nil
+}
+
+func parseRange(s string) (statusCodeRange, error) {
+	// Expected ASCII characters so no need to convert into runes
+	if len(s) < 2 {
+		return statusCodeRange{}, errors.New("range format error")
+	}
+
+	startInterval, err := parseStartInterval(s[0])
+	if err != nil {
+		return statusCodeRange{}, err
+	}
+
+	endInterval, err := parseEndInterval(s[len(s)-1])
+	if err != nil {
+		return statusCodeRange{}, err
+	}
+
+	codesWithoutIntervalTypes := s[1 : len(s)-1]
+
+	splits := strings.Split(codesWithoutIntervalTypes, ",")
+	if len(splits) != 2 {
+		return statusCodeRange{}, fmt.Errorf("expected 2 status codes in the range, got %d", len(splits))
+	}
+
+	start, err := strconv.Atoi(splits[0])
+	if err != nil {
+		return statusCodeRange{}, fmt.Errorf("invalid range start %q", splits[0])
+	}
+
+	end, err := strconv.Atoi(splits[1])
+	if err != nil {
+		return statusCodeRange{}, fmt.Errorf("invalid range end %q", splits[1])
+	}
+
+	return statusCodeRange{
+		start:         start,
+		startInterval: startInterval,
+		end:           end,
+		endInterval:   endInterval,
+	}, nil
+}
+
+func parseStartInterval(c uint8) (intervalType, error) {
+	if c == '[' {
+		return included, nil
+	}
+	if c == '(' {
+		return excluded, nil
+	}
+	return 0, fmt.Errorf(`invalid interval type, expected [ or (, got %c`, c)
+}
+
+func parseEndInterval(c uint8) (intervalType, error) {
+	if c == ']' {
+		return included, nil
+	}
+	if c == ')' {
+		return excluded, nil
+	}
+	return 0, fmt.Errorf(`invalid interval type, expected ] or ), got %c`, c)
 }
 
 type statusCode struct {
@@ -49,100 +146,12 @@ func (s *statusCodeRange) isIncluded(statusCode int) bool {
 	return statusCode > s.start && statusCode < s.end
 }
 
-type intervalType uint32
-
-const (
-	included intervalType = iota
-	excluded
-)
-
-func parseStatusCodes(cfg string) ([]statusCode, error) {
-	splits := strings.Split(cfg, ";")
-	statuses := make([]statusCode, len(splits))
-
-	for idx, split := range splits {
-		i, err := strconv.Atoi(split)
-		isNumber := err == nil
-		if isNumber {
-			statuses[idx] = statusCode{
-				exactCode: i,
-			}
-		} else {
-			codeRange, err := parseRange(split)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse status code range %q: %w", split, err)
-			}
-
-			statuses[idx] = statusCode{
-				rangeCodes: &codeRange,
-			}
-		}
-	}
-	return statuses, nil
+type statusCodeLoggerHandler struct {
+	codes []statusCode
 }
 
-func parseRange(s string) (statusCodeRange, error) {
-	// Expected ASCII characters so no need to convert into runes
-	if len(s) < 2 {
-		return statusCodeRange{}, fmt.Errorf("invalid range %q", s)
-	}
-
-	startInterval, err := parseStartInterval(s[0])
-	if err != nil {
-		return statusCodeRange{}, err
-	}
-
-	endInterval, err := parseEndInterval(s[len(s)-1])
-	if err != nil {
-		return statusCodeRange{}, err
-	}
-
-	// Filter interval types
-	codes := s[1 : len(s)-1]
-
-	splits := strings.Split(codes, ",")
-	if len(splits) != 2 {
-		return statusCodeRange{}, fmt.Errorf("invalid status code range: %q", s)
-	}
-
-	start, err := strconv.Atoi(splits[0])
-	if err != nil {
-		return statusCodeRange{}, fmt.Errorf("invalid status code range: %q", s)
-	}
-
-	end, err := strconv.Atoi(splits[1])
-	if err != nil {
-		return statusCodeRange{}, fmt.Errorf("invalid status code range: %q", s)
-	}
-
-	return statusCodeRange{
-		start:         start,
-		startInterval: startInterval,
-		end:           end,
-		endInterval:   endInterval,
-	}, nil
-}
-
-func parseStartInterval(c uint8) (intervalType, error) {
-	if c == '[' {
-		return included, nil
-	} else if c == '(' {
-		return excluded, nil
-	}
-	return 0, fmt.Errorf(`invalid interval type %c, expected [ or (`, c)
-}
-
-func parseEndInterval(c uint8) (intervalType, error) {
-	if c == ']' {
-		return included, nil
-	} else if c == ')' {
-		return excluded, nil
-	}
-	return 0, fmt.Errorf(`invalid interval type %c, expected ] or )`, c)
-}
-
-func shouldLog(statusCode int, codes []statusCode) bool {
-	for _, code := range codes {
+func (s statusCodeLoggerHandler) shouldLog(statusCode int) bool {
+	for _, code := range s.codes {
 		if code.isRange() {
 			if code.rangeCodes.isIncluded(statusCode) {
 				return true

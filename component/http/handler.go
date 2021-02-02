@@ -192,15 +192,17 @@ func handleError(logger log.Logger, w http.ResponseWriter, enc encoding.EncodeFu
 		if _, err := w.Write(p); err != nil {
 			logger.Errorf("failed to write Response: %v", err)
 		}
-		if shouldLog(err.code, statusCodes) {
-			logger.Error("request error: code=%d, payload=%v", err.code, err.payload)
-		}
+		handleLogging(logger, err.code, err.payload)
 		return
 	}
 	// Using http.Error helper hijacks the content type Header of the Response returning plain text Payload.
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	if shouldLog(http.StatusInternalServerError, statusCodes) {
-		logger.Error("request error: code=%d, payload=%v", http.StatusInternalServerError, err)
+	handleLogging(logger, http.StatusInternalServerError, err)
+}
+
+func handleLogging(logger log.Logger, statusCode int, payload interface{}) {
+	if statusCodeLogger.shouldLog(statusCode) {
+		logger.Error("request error: code=%d, payload=%v", statusCode, payload)
 	}
 }
 
