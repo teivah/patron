@@ -3,14 +3,9 @@ package http
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
-
-	"github.com/beatlabs/patron/log"
 )
-
-var statusCodeLogger statusCodeLoggerHandler
 
 type intervalType uint32
 
@@ -19,16 +14,12 @@ const (
 	excluded                     // '(' or ')'
 )
 
-func init() {
-	cfg, _ := os.LookupEnv("PATRON_HTTP_STATUS_ERROR_LOGGING")
-	h, err := newStatusCodeLoggerHandler(strings.TrimSpace(cfg))
-	if err != nil {
-		log.Fatalf("failed to parse status codes %q: %v", cfg, err)
-	}
-	statusCodeLogger = h
-}
-
 func newStatusCodeLoggerHandler(cfg string) (statusCodeLoggerHandler, error) {
+	cfg = strings.TrimSpace(cfg)
+	if len(cfg) == 0 {
+		return statusCodeLoggerHandler{}, nil
+	}
+
 	splits := strings.Split(cfg, ";")
 	codes := make([]statusCode, len(splits))
 
