@@ -210,7 +210,7 @@ func NewRouteBuilder(path string, processor ProcessorFunc) *RouteBuilder {
 		ee = append(ee, errors.New("processor is nil"))
 	}
 
-	return &RouteBuilder{path: path, errors: ee, handler: handler(processor, path)}
+	return &RouteBuilder{path: path, errors: ee, handler: handler(processor)}
 }
 
 // NewGetRouteBuilder constructor

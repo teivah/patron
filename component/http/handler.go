@@ -13,7 +13,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
-func handler(hnd ProcessorFunc, path string) http.HandlerFunc {
+func handler(hnd ProcessorFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ct, dec, enc, err := determineEncoding(r.Header)
 		if err != nil {
@@ -41,7 +41,7 @@ func handler(hnd ProcessorFunc, path string) http.HandlerFunc {
 
 		rsp, err := hnd(ctx, req)
 		if err != nil {
-			handleError(logger, w, enc, err, path)
+			handleError(logger, w, enc, err)
 			return
 		}
 
@@ -180,7 +180,7 @@ func handleSuccess(w http.ResponseWriter, r *http.Request, rsp *Response, enc en
 	return err
 }
 
-func handleError(logger log.Logger, w http.ResponseWriter, enc encoding.EncodeFunc, err error, path string) {
+func handleError(logger log.Logger, w http.ResponseWriter, enc encoding.EncodeFunc, err error) {
 	// Assert error to type Error in order to leverage the code and Payload values that such errors contain.
 	if err, ok := err.(*Error); ok {
 		p, encErr := enc(err.payload)
