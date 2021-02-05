@@ -173,7 +173,7 @@ For example, setting this environment variable to `409;[500,600)` that an error 
 
 Be it a specific status code or a range; each element must be delimited with `;`.
 
-To enable error logging, we must add the `NewLoggingTracingMiddleware` middleware.
+To enable error logging, we enable route tracing (`WithTrace` option).
 
 ## HTTP Routes
 
