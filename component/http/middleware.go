@@ -385,7 +385,7 @@ func statusCodeErrorLogging(ctx context.Context, statusCodeLogger statusCodeLogg
 	}
 }
 
-func getOrSetCorrelationID(h http.Header) string {
+func getOrSetCorrelationID(h http.Header) stxring {
 	cor, ok := h[correlation.HeaderID]
 	if !ok {
 		corID := uuid.New().String()
